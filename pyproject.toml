@@ -1,0 +1,33 @@
+[build-system]
+requires = ["uv_build>=0.11.11,<0.12.0"]
+build-backend = "uv_build"
+
+[project]
+name = "hello-robot-stretch4-docking"
+# Versioning follow CalVer (YYYY.MM.DD) for PEP 440 compliance
+version = "2026.08.06"
+description = "An autodock routine for Stretch 4 + library to assemble your own docking procedures"
+readme = "README.md"
+authors = [
+    { name = "Binit Shah", email = "bshah@hello-robot.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "coverage>=7.15.0", # required for numba
+    "hello-robot-stretch4-urdf>=2026.8.21",
+    "loguru>=0.7.3",
+    "numba>=0.67.0",
+    "numpy>=2.5.2",
+    "pyzmq>=27.2.0",
+    "scipy>=1.18.1",
+]
+
+[tool.uv.build-backend]
+module-name = "stretch4_docking"
+
+[project.urls]
+Homepage = "https://github.com/hello-robot/stretch4_docking"
+
+[project.scripts]
+stretch_autodock = "stretch4_docking.apps.autodock_cli:main"
+
