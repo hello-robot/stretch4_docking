@@ -24,10 +24,11 @@ An self-charging routine for Stretch 4 that docks the robot in under 20 seconds,
 
     [Create a map](https://docs.hello-robot.com/stretch4_docs/working-with-stretch/navigation/navigating_with_stretch) and ensure Nav2 is working. Then:
     ```
-    ros2 launch stretch_nav2 autodocking_cpu.launch.py
-    # In a separate terminal:
-    cd stretch_nav2
-    rviz2 -d rviz/autodocking_panel.rviz
+    Coming Soon
+    # ros2 launch stretch_nav2 autodocking_cpu.launch.py
+    # # In a separate terminal:
+    # cd stretch_nav2
+    # rviz2 -d rviz/autodocking_panel.rviz
     ```
 
 ## Assumptions
@@ -54,11 +55,12 @@ These edge cases are not supported currently. The robot may exhibit bad behavior
 
 ### Building your own docking pipeline (Advanced)
 
+You can identify a dock and track it using:
 ```python
 from stretch4_docking.trackers import DockTracker, DockAmbiguityError
 
 tracker = DockTracker()
-tracker.warm_start()
+tracker.warm_start()  # compiles on first run, loads from cache afterwards
 
 try:
     tracker.identify(points) # Nx4 (x,y,z,intensity)
@@ -67,4 +69,34 @@ except DockAmbiguityError as e:
 
 if tracker.is_tracking():
     print(tracker.get_pose()) # SE(3) pose as (x, y, z, qx, qy, qz, qw)
+```
+
+You can build a egocentric costmap using:
+```python
+from stretch4_docking.costmap import Costmap, RingFilter, LIDAR_LEFT_ORIGIN, LIDAR_RIGHT_ORIGIN
+
+ring_filter = RingFilter()
+ring_filter.warm_start()
+
+costmapper = Costmap()
+costmapper.warm_start()
+
+left = ring_filter.process(left_frame.points, sensor_origin=LIDAR_LEFT_ORIGIN)
+right = ring_filter.process(right_frame.points, sensor_origin=LIDAR_RIGHT_ORIGIN)
+filtered_xyz = np.vstack([left[:, :3], right[:, :3]])
+costmap = costmapper.process(filtered_xyz, dock_pose=tracker.get_pose())
+```
+
+You can servo (with collision awareness) using:
+```python
+from stretch4_docking.costmap import filter_clearance_velocity
+from stretch4_docking.servo import XYThetaServo
+
+servo_law = XYThetaServo()
+
+errx, erry, errt = error
+vx, vy, wz = servo_law.step(errx, erry, errt)
+filtered = filter_clearance_velocity(vx, vy, wz, costmap.obstacle_xy, costmap.cliff_xy)
+robot.set_velocity(filtered.vx, filtered.vy, filtered.wz)
+robot.push_command()
 ```

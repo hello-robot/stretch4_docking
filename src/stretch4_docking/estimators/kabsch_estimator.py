@@ -5,6 +5,11 @@ from stretch4_docking.detectors.numba_detector import IsocelesDetector
 
 
 class KabschEstimator(IsocelesDetector):
+    def warm_start(self):
+        super().warm_start()
+        self.calculate_pose(self.P_local[0], self.P_local[1], self.P_local[2])
+        self.reset()
+
     def calculate_pose(self, super_apex, super_right, super_left):
         P = self.P_local
         Q = np.array([super_apex, super_right, super_left])

@@ -78,6 +78,67 @@ def fused_read_transform_points(cloud, rotation, translation, out, start=0):
     )
 
 
+@numba.njit(cache=True)
+def _fused_frame_xform_jit(xyz, intens, rings, R, t, out, start):
+    r00 = R[0, 0]; r01 = R[0, 1]; r02 = R[0, 2]
+    r10 = R[1, 0]; r11 = R[1, 1]; r12 = R[1, 2]
+    r20 = R[2, 0]; r21 = R[2, 1]; r22 = R[2, 2]
+    t0 = t[0]; t1 = t[1]; t2 = t[2]
+    for i in range(xyz.shape[0]):
+        x = xyz[i, 0]
+        y = xyz[i, 1]
+        z = xyz[i, 2]
+        j = start + i
+        out[j, 0] = r00 * x + r01 * y + r02 * z + t0
+        out[j, 1] = r10 * x + r11 * y + r12 * z + t1
+        out[j, 2] = r20 * x + r21 * y + r22 * z + t2
+        out[j, 3] = intens[i]
+        out[j, 4] = np.float32(rings[i])
+    return start + xyz.shape[0]
+
+
+def transform_frame_points(frame, rotation, translation, out, start=0):
+    xyz = frame.points
+    n_points = xyz.shape[0]
+    if n_points == 0:
+        return start
+    if out.shape[0] - start < n_points:
+        raise ValueError(
+            f"output buffer too small: {out.shape[0] - start} rows free, need {n_points}"
+        )
+
+    return _fused_frame_xform_jit(
+        np.ascontiguousarray(xyz, dtype=np.float32),
+        frame.intensity,
+        frame.ring,
+        np.ascontiguousarray(rotation, dtype=np.float32),
+        np.ascontiguousarray(translation, dtype=np.float32),
+        out, start,
+    )
+
+
+def warm_start(ring_dtypes=(np.uint16, np.uint8), out_dtype=np.float32):
+    n = 4
+
+    def strided(dtype):
+        # A non-contiguous 1-D view, like _strided_field_view() produces.
+        return np.zeros(2 * n, dtype=dtype)[::2]
+
+    xs, ys, zs, intens = (strided(np.float32) for _ in range(4))
+    R = np.ascontiguousarray(np.eye(3), dtype=np.float32)
+    t = np.ascontiguousarray(np.zeros(3), dtype=np.float32)
+    out = np.zeros((n, 5), dtype=out_dtype)
+    for ring_dtype in ring_dtypes:
+        _fused_gather_xform_jit(xs, ys, zs, intens, strided(ring_dtype), R, t, out, 0)
+
+    xyz = np.zeros((n, 3), dtype=np.float32)
+    for ring_dtype in ring_dtypes:
+        for intensity_dtype in (np.uint8, np.float32):
+            for as_field in (strided, lambda dtype: np.zeros(n, dtype=dtype)):
+                _fused_frame_xform_jit(
+                    xyz, as_field(intensity_dtype), as_field(ring_dtype), R, t, out, 0)
+
+
 def transform_to_rt(transform):
     """Convert a TransformStamped into a (3x3 rotation, 3-vector translation) numpy pair."""
     q = transform.transform.rotation

@@ -63,6 +63,10 @@ class DockTracker(KabschEstimator):
         ]
         self.assoc_radius = 0.5 * min(self.Lbase, self.Leq)
 
+    def warm_start(self):
+        super().warm_start()
+        self.drop_track()
+
     def identify(self, points, allow_ambiguity=False):
         """
         `allow_ambiguity` prevents the tracker from raising DockAmbiguityError when more than 1

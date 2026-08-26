@@ -3,7 +3,13 @@ from dataclasses import dataclass
 from scipy.ndimage import distance_transform_edt
 from scipy.spatial.transform import Rotation
 
-from .floor_analysis import FloorAnalysis, FloorAnalysisConfig, LabeledLayers, _drop_small_components
+from .floor_analysis import (
+    FloorAnalysis,
+    FloorAnalysisConfig,
+    LabeledLayers,
+    _drop_small_components,
+    _warm_start_cloud,
+)
 
 
 @dataclass(frozen=True)
@@ -46,6 +52,15 @@ class Costmap:
         self.resolution = self.analysis.resolution
         self.origin = self.analysis.origin
         self.cell_origin = self.origin + self.resolution / 2.0
+
+    def warm_start(self):
+        """Compile (or load from cache) the numba kernels process() relies on.
+
+        Drives the full pipeline once on a synthetic scene: the floor analysis
+        kernels, plus the dock masking and scipy inflation that run afterwards
+        and have their own first-call cost.
+        """
+        self.process(_warm_start_cloud(), dock_pose=(1.4, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0))
 
     def process(self, points: np.ndarray, dock_pose: np.ndarray | None = None, inflate: bool = True) -> CostmapResult:
         return self.build_costmap(self.analysis.process(points), dock_pose, inflate)

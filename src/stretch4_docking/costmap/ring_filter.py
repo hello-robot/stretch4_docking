@@ -5,6 +5,12 @@ from dataclasses import dataclass
 
 LIDAR_LEFT_ORIGIN = np.array([0.03874421, 0.12441374, 1.500672], dtype=np.float32)
 LIDAR_RIGHT_ORIGIN = np.array([0.03874421, -0.12441374, 1.500672], dtype=np.float32)
+LIDAR_LEFT_ROT = np.array([[ 0.51955507,  0.72351543,  0.45451948],
+                           [ 0.48359135, -0.68755171,  0.54167522],
+                           [ 0.70441603, -0.06162842, -0.70710678]], dtype=np.float32)
+LIDAR_RIGHT_ROT = np.array([[-0.51955507,  0.72351543,  0.45451948],
+                            [ 0.48359135,  0.68755171, -0.54167522],
+                            [-0.70441603, -0.06162842, -0.70710678]], dtype=np.float32)
 
 def fetch_origins():
     from stretch4_urdf import get_urdf_from_robot_params, get_transform
@@ -133,10 +139,28 @@ def _organized_grid_cols(rings: np.ndarray, num_rings: int) -> int:
     return 0
 
 
+def _warm_start_cloud(dtype: np.dtype) -> np.ndarray:
+    n_rings, per_ring = 4, 16
+    rings = np.repeat(np.arange(n_rings), per_ring)
+    azimuth = np.tile(np.linspace(-np.pi, np.pi, per_ring, endpoint=False), n_rings)
+    radius = 1.0 + 0.05 * (rings % 2)
+    return np.column_stack([
+        radius * np.cos(azimuth),
+        radius * np.sin(azimuth),
+        0.1 * rings - 0.2,
+        np.full(rings.shape, 100.0),
+        rings,
+    ]).astype(dtype, copy=False)
+
+
 class RingFilter:
 
     def __init__(self, config: RingFilterConfig | None = None):
         self.config = config if config is not None else RingFilterConfig()
+
+    def warm_start(self):
+        for dtype in (np.float32, np.float64):
+            self.process(_warm_start_cloud(dtype), sensor_origin=LIDAR_LEFT_ORIGIN)
 
     def process(self, points: np.ndarray, sensor_origin: np.ndarray, compact: bool = True) -> np.ndarray:
         if len(points) == 0:

@@ -152,7 +152,7 @@ def fit_perpendicular_floor_plane(
         seed = int(rng.integers(0, 2**31 - 1))
 
     result = _numba_fit_floor_plane(
-        points[:, :3],
+        np.ascontiguousarray(points[:, :3]),
         max_tilt_deg,
         max(iterations, 1),
         threshold,

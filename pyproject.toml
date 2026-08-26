@@ -14,6 +14,8 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "coverage>=7.15.0", # required for numba
+    "hello-robot-stretch4-body>=2026.8.21",
+    "hello-robot-stretch4-pyhesai-wrapper>=2026.8.25",
     "hello-robot-stretch4-urdf>=2026.8.21",
     "loguru>=0.7.3",
     "numba>=0.67.0",
@@ -30,4 +32,5 @@ Homepage = "https://github.com/hello-robot/stretch4_docking"
 
 [project.scripts]
 stretch_autodock = "stretch4_docking.apps.autodock_cli:main"
+stretch_autodock_cache = "stretch4_docking.numba_cache:main"
 

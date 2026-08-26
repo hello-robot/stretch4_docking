@@ -112,14 +112,46 @@ def _raycast_occlusions(has_tall, missing_floor, occlusion_mask, size):
                         occlusion_mask[sr, sc] = True
 
 
+def _warm_start_cloud() -> np.ndarray:
+    azimuth = np.linspace(0.0, 2.0 * np.pi, 48, endpoint=False)
+    radii = np.linspace(0.35, 1.9, 6)
+    grid_r, grid_a = np.meshgrid(radii, azimuth, indexing='ij')
+    floor = np.column_stack([
+        (grid_r * np.cos(grid_a)).ravel(),
+        (grid_r * np.sin(grid_a)).ravel(),
+        np.zeros(grid_r.size),
+    ])
+
+    wall_x = np.arange(0.9, 1.3, 0.02)
+    wall_z = np.array([0.10, 0.15, 0.20])
+    mesh_x, mesh_z = np.meshgrid(wall_x, wall_z, indexing='ij')
+    wall = np.column_stack([
+        mesh_x.ravel(),
+        np.zeros(mesh_x.size),
+        mesh_z.ravel(),
+    ])
+
+    tall_a = azimuth[::6]
+    tall = np.column_stack([
+        1.5 * np.cos(tall_a),
+        1.5 * np.sin(tall_a),
+        np.full(tall_a.size, 0.6),
+    ])
+
+    return np.vstack([floor, wall, tall])
+
+
 class FloorAnalysis:
 
     def __init__(self, config: FloorAnalysisConfig | None = None):
         self.config = config if config is not None else FloorAnalysisConfig()
-        self.resolution = config.resolution_m
-        self.radius = config.map_radius_m
+        self.resolution = self.config.resolution_m
+        self.radius = self.config.map_radius_m
         self.size = int(np.ceil(2.0 * self.radius / self.resolution))
         self.origin = -self.radius + self.resolution / 2.0
+
+    def warm_start(self):
+        self.process(_warm_start_cloud())
 
     def _indices(self, points: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         cols = np.floor((points[:, 0] - self.origin) / self.resolution).astype(np.int64)

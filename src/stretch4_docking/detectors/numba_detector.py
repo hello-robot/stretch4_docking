@@ -133,6 +133,11 @@ class IsocelesDetector:
         self.targets = []
         self.filtered_points = np.empty((0, 4))
 
+    def warm_start(self):
+        pts = np.ascontiguousarray(self.P_local, dtype=np.float64)
+        numba_find_triangle(pts, self.Leq, self.Lbase, self.P_local, EPSILON)
+        self.reset()
+
     def identify(self, points):
         self.reset()
         z = points[:, 2]
