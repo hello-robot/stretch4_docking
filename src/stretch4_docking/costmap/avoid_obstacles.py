@@ -1,5 +1,5 @@
 import numpy as np
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .floor_analysis import FloorAnalysisConfig
 
@@ -42,12 +42,14 @@ class ClearanceFilterResult:
     blocked_by_cliff: bool = False
     blocking_obstacle_count: int = 0
     blocking_cliff_count: int = 0
+    blocking_obstacles: np.ndarray = field(default_factory=lambda: np.zeros((0, 2)))
+    blocking_cliffs: np.ndarray = field(default_factory=lambda: np.zeros((0, 2)))
 
 
-def count_closing_points(points_xy: np.ndarray, step: np.ndarray, stop_radius_m: float) -> int:
+def get_closing_points(points_xy: np.ndarray, step: np.ndarray, stop_radius_m: float) -> np.ndarray:
     points = _as_xy(points_xy)
     if len(points) == 0:
-        return 0
+        return np.zeros((0, 2), dtype=np.float64)
 
     after = points - np.asarray(step, dtype=np.float64).reshape(2)
     d_next_sq = np.einsum('ij,ij->i', after, after)
@@ -58,7 +60,7 @@ def count_closing_points(points_xy: np.ndarray, step: np.ndarray, stop_radius_m:
         & (d_next_sq < radius * radius)
         & (d_next_sq < d_now_sq)
     )
-    return int(np.count_nonzero(closing))
+    return points[closing]
 
 
 def filter_clearance_velocity(
@@ -76,13 +78,13 @@ def filter_clearance_velocity(
         return ClearanceFilterResult(float(vx), float(vy), float(wz))
 
     step = linear * cfg.horizon_s
-    obstacle_count = count_closing_points(
+    blocking_obstacles = get_closing_points(
         obstacle_xy, step, cfg.obstacle_stop_radius_m)
-    cliff_count = count_closing_points(
+    blocking_cliffs = get_closing_points(
         cliff_xy, step, cfg.cliff_stop_radius_m)
 
-    blocked_by_obstacle = obstacle_count > 0
-    blocked_by_cliff = cliff_count > 0
+    blocked_by_obstacle = len(blocking_obstacles) > 0
+    blocked_by_cliff = len(blocking_cliffs) > 0
 
     out_vx, out_vy = float(vx), float(vy)
     if blocked_by_obstacle or blocked_by_cliff:
@@ -94,6 +96,8 @@ def filter_clearance_velocity(
         wz=float(wz),
         blocked_by_obstacle=blocked_by_obstacle,
         blocked_by_cliff=blocked_by_cliff,
-        blocking_obstacle_count=obstacle_count,
-        blocking_cliff_count=cliff_count,
+        blocking_obstacle_count=len(blocking_obstacles),
+        blocking_cliff_count=len(blocking_cliffs),
+        blocking_obstacles=blocking_obstacles,
+        blocking_cliffs=blocking_cliffs,
     )

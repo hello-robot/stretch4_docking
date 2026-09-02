@@ -49,6 +49,45 @@ These edge cases are not supported currently. The robot may exhibit bad behavior
 
 ## Developing
 
+### Single vs. Dual Return
+
+Each LiDAR's "return mode" can configured using the [pyhesai wrapper](https://github.com/hello-robot/stretch4_pyhesai_wrapper). Typically, a LiDAR either returns its strongest reading (single return) or last & strongest (dual return). This means the LiDARs report double the data in dual return mode, typ. ~230400 points.
+
+Profiling `stretch_autodock` CLI, we found total latency (cloud in -> control out) dropped from an average of 49.95 ms (Dual) to 34.76 ms (Single), resulting in a ~30% computation overhead reduction.
+ - Average dock ID-ing processing step decreased from 10.52 ms to 6.57 ms (~38% decrease).
+ - Average ring filtering processing step decreased from 21.90 ms to 16.28 ms (~26% decrease).
+ - Average costmap building processing step decreased from 15.10 ms to 10.07 ms (~33% decrease).
+
+Rate Stability increased. Both configurations successfully maintain 10.0 Hz control, but the single return mode exhibits much higher frame rate stability (standard deviation of 0.02 Hz versus 0.15 Hz).
+
+Rate stability and total latency directly affect the quality of motion during docking. If it's too high (>100ms), you'll see weird behavior from the routine. So if your LiDARS are configured for dual-return mode, `stretch_autodock` temporarily switches them to single-return for the duration of the routine. The ROS2 docking servers do **not** do this since developers may have concurrently running nodes that need the second set of returns. You can see which return mode your LiDARs are in using `REx_hesai_show_config`. To change it programmatically:
+
+```python
+from stretch4_pyhesai_wrapper.ptc_client import (
+    LEFT_LIDAR_IP,
+    RIGHT_LIDAR_IP,
+    get_return_mode,
+    set_return_mode,
+    RETURN_MODE_NAMES,
+)
+
+# Set LiDARs to single-return if needed
+lmode = get_return_mode(LEFT_LIDAR_IP)
+rmode = get_return_mode(RIGHT_LIDAR_IP)
+modes_before = None
+if RETURN_MODE_NAMES.get(lmode, 'unknown') != 'strongest' or \
+    RETURN_MODE_NAMES.get(rmode, 'unknown') != 'strongest':
+    modes_before = (lmode, rmode)
+    set_return_mode(LEFT_LIDAR_IP, 1) # 1 -> strongest
+    set_return_mode(RIGHT_LIDAR_IP, 1)
+
+# Change it back if needed
+if modes_before is not None:
+    lmode, rmode = modes_before
+    set_return_mode(LEFT_LIDAR_IP, lmode)
+    set_return_mode(RIGHT_LIDAR_IP, rmode)
+```
+
 ### ROS2
 
 *Coming Soon*

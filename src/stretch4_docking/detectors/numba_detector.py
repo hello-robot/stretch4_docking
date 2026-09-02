@@ -128,10 +128,14 @@ class IsocelesDetector:
         self.Lbase = np.linalg.norm(left - right)
         self.Leq = np.linalg.norm(left - apex)
         self.filtered_points = np.empty((0, 4))
+        self.colors = np.full((0, 3), 255)
+        self.corners = np.zeros((3, 3))
 
     def reset(self):
         self.targets = []
         self.filtered_points = np.empty((0, 4))
+        self.colors = np.full((0, 3), 255)
+        self.corners = np.zeros((3, 3))
 
     def warm_start(self):
         pts = np.ascontiguousarray(self.P_local, dtype=np.float64)
@@ -147,6 +151,7 @@ class IsocelesDetector:
         valid_i = (i > 235)
         points = points[valid_i]
         self.filtered_points = points
+        self.colors = np.full((self.filtered_points.shape[0], 3), 255)
 
         n_points = len(points)
         active_mask = np.ones(n_points, dtype=bool)
@@ -185,6 +190,10 @@ class IsocelesDetector:
                 super_right = super_leg2
                 super_left = super_leg1
                 c_right, c_left = c_leg2, c_leg1
+            self.colors[c_apex] = [255, 0, 0]
+            self.colors[c_right] = [0, 255, 0]
+            self.colors[c_left] = [0, 0, 255]
+            self.corners = np.vstack([super_apex, super_right, super_left])
             self.calculate_pose(super_apex, super_right, super_left)
             active_indices = np.where(active_mask)[0]
 

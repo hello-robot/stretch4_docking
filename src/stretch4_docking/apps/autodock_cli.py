@@ -5,6 +5,13 @@ from scipy.spatial.transform import Rotation
 
 from stretch4_body.robot.robot_client import RobotClient
 from stretch4_pyhesai_wrapper import stream_lidar_both
+from stretch4_pyhesai_wrapper.ptc_client import (
+    LEFT_LIDAR_IP,
+    RIGHT_LIDAR_IP,
+    get_return_mode,
+    set_return_mode,
+    RETURN_MODE_NAMES,
+)
 
 from stretch4_docking.trackers import DockTracker
 from stretch4_docking.costmap import Costmap, RingFilter, filter_clearance_velocity, LIDAR_LEFT_ORIGIN, LIDAR_RIGHT_ORIGIN, LIDAR_LEFT_ROT, LIDAR_RIGHT_ROT
@@ -14,7 +21,11 @@ from stretch4_docking.utils import cloud_reader, ensure_stow
 
 
 def autodock(robot):
-    logger.info(f"Warm starting...")
+    if robot.power_periph.status['adapter_voltage_present']:
+        logger.info("Already charging.")
+        return
+
+    logger.info("Warm starting...")
     warm_start_start = time.perf_counter()
 
     tracker = DockTracker()
@@ -53,7 +64,7 @@ def autodock(robot):
                 rate = 1.0 / dt
                 measured_control_rate = 0.1 * rate + 0.9 * measured_control_rate
             if dt > 0.25:
-                logger.warn('Loop latency too high, may see abnormal behavior')
+                logger.warning('Loop latency too high, may see abnormal behavior')
         last_loop_time = loop_start
         t0 = time.perf_counter()
 
@@ -75,9 +86,8 @@ def autodock(robot):
 
         tracker.identify(points[:, :4])
         if not tracker.is_tracking():
-            logger.warn("No dock seen...")
+            logger.warning("No dock seen...")
             continue
-
         dock_pose = tracker.get_pose()
         t2 = time.perf_counter()
 
@@ -123,10 +133,28 @@ def main():
     robot.startup()
     assert robot.is_homed()
     assert ensure_stow.ensure_stowed(robot)
+    modes_before = None
     try:
+        # Set LiDARs to single-return if needed
+        lmode = get_return_mode(LEFT_LIDAR_IP)
+        rmode = get_return_mode(RIGHT_LIDAR_IP)
+        if RETURN_MODE_NAMES.get(lmode, 'unknown') != 'strongest' or \
+           RETURN_MODE_NAMES.get(rmode, 'unknown') != 'strongest':
+            logger.warning("Switching LiDARs temporarily to single-return")
+            modes_before = (lmode, rmode)
+            set_return_mode(LEFT_LIDAR_IP, 1) # 1 -> strongest
+            set_return_mode(RIGHT_LIDAR_IP, 1)
+
         autodock(robot)
     finally:
         robot.base.enable_freewheel_mode()
         robot.push_command()
         robot.stop()
+        if modes_before is not None:
+            logger.warning("Switching LiDARs back to prior return-mode")
+            lmode, rmode = modes_before
+            set_return_mode(LEFT_LIDAR_IP, lmode)
+            set_return_mode(RIGHT_LIDAR_IP, rmode)
 
+if __name__ == "__main__":
+    main()
