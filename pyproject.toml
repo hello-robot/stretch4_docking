@@ -5,7 +5,7 @@ build-backend = "uv_build"
 [project]
 name = "hello-robot-stretch4-docking"
 # Versioning follow CalVer (YYYY.MM.DD) for PEP 440 compliance
-version = "2026.08.25"
+version = "2026.09.03"
 description = "An autodock routine for Stretch 4 + library to assemble your own docking procedures"
 readme = "README.md"
 authors = [
