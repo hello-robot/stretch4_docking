@@ -5,7 +5,7 @@ build-backend = "uv_build"
 [project]
 name = "hello-robot-stretch4-docking"
 # Versioning follow CalVer (YYYY.MM.DD) for PEP 440 compliance
-version = "2026.09.03"
+version = "2026.09.21"
 description = "An autodock routine for Stretch 4 + library to assemble your own docking procedures"
 readme = "README.md"
 authors = [
@@ -14,7 +14,7 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "coverage>=7.15.0", # required for numba
-    "hello-robot-stretch4-body>=2026.8.21",
+    "hello-robot-stretch4-body>=2026.9.4",
     "hello-robot-stretch4-pyhesai-wrapper>=2026.8.25",
     "hello-robot-stretch4-urdf>=2026.8.21",
     "loguru>=0.7.3",
@@ -22,6 +22,7 @@ dependencies = [
     "numpy>=2.5.2",
     "pyzmq>=27.2.0",
     "scipy>=1.18.1",
+    "ssmach>=2026.9.2",
 ]
 
 [tool.uv.build-backend]

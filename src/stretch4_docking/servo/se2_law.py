@@ -49,7 +49,7 @@ class XYThetaServo:
     def _axis_pid(self, err, kp, integral, ki):
         return kp * err + ki * integral
 
-    def step(self, err_x, err_y, err_theta):
+    def step(self, err_x, err_y, err_theta, *args, **kwargs):
         err_theta = math.atan2(math.sin(err_theta), math.cos(err_theta))
 
         now = time.monotonic()
@@ -84,4 +84,4 @@ class XYThetaServo:
         if abs(omega) > self.max_omega:
             omega = math.copysign(self.max_omega, omega)
 
-        return vx, vy, omega
+        return vx, vy, omega, 1.0

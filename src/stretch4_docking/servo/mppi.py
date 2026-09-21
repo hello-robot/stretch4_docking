@@ -1,7 +1,9 @@
 import zmq
 import time
 import struct
+import socket
 import numpy as np
+from loguru import logger
 from dataclasses import dataclass
 
 REQUEST_HEADER = struct.Struct('<iifffffffifffii')
@@ -35,16 +37,17 @@ class MppiReply:
         return self.vx, self.vy, self.wz
 
 
-def _as_origin_xy(origin) -> tuple[float, float]:
-    values = np.asarray(origin, dtype=np.float64).ravel()
-    if values.size == 1:
-        return float(values[0]), float(values[0])
-    if values.size == 2:
-        return float(values[0]), float(values[1])
-    raise ValueError(f"origin must be a scalar or an (x, y) pair, got {values.size} elements")
-
-
 class Mppi:
+
+    @staticmethod
+    def is_online(config: MppiConfig | None = None) -> None:
+        """Checks if port on the Jetson accepts a connection."""
+        config = config if config is not None else MppiConfig()
+        try:
+            with socket.create_connection((config.host, config.port), timeout=2):
+                return True
+        except OSError:
+            return False
 
     def __init__(self, config: MppiConfig | None = None):
         self.config = config if config is not None else MppiConfig()
@@ -79,14 +82,26 @@ class Mppi:
     def __exit__(self, exc_type, exc, tb) -> None:
         self.close()
 
-    def request(self, costmap: np.ndarray, origin, resolution: float, goal, goal_valid: bool = True, reset: bool = False, elapsed_s: float = 0.0, state=(0.0, 0.0, 0.0)) -> MppiReply | None:
+    def reset(self) -> None:
+        """Force the next request() to carry the reset flag. Call when starting or restarting a servo attempt."""
+        self.needs_reset = True
+
+    def step(self, err_x: float, err_y: float, err_theta: float, costmap: np.ndarray, origin_x: float, origin_y: float, resolution: float,
+              goal_valid: bool = True, reset: bool = False, elapsed_s: float = 0.0,
+              state=(0.0, 0.0, 0.0)) -> tuple[float, float, float, float | None]:
+        reply = self.request(costmap, origin_x, origin_y, resolution, goal=(err_x, err_y, err_theta),
+                              goal_valid=goal_valid, reset=reset, elapsed_s=elapsed_s, state=state)
+        if reply is None:
+            return 0.0, 0.0, 0.0, 1.0
+        return reply.vx, reply.vy, reply.wz, reply.stiffness
+
+    def request(self, costmap: np.ndarray, origin_x, origin_y, resolution: float, goal, goal_valid: bool = True, reset: bool = False, elapsed_s: float = 0.0, state=(0.0, 0.0, 0.0)) -> MppiReply | None:
         if self.socket is None:
             self.connect()
 
         cells = np.ascontiguousarray(costmap, dtype=np.float32)
         if cells.ndim != 2:
             raise ValueError(f"costmap must be a 2D grid, got {cells.ndim} dimensions")
-        origin_x, origin_y = _as_origin_xy(origin)
 
         self.frame_counter += 1
         header = REQUEST_HEADER.pack(
@@ -128,6 +143,7 @@ class Mppi:
     def _fail(self, message: str, reconnect: bool = False) -> None:
         self.last_error = message
         self.needs_reset = True
+        logger.error(f"{self.last_error=} {self.need_reset=}")
         if reconnect:
             self.connect()
         return None
